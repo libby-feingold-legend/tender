@@ -11,8 +11,7 @@ export default function RootLayout() {
   const { isAuthenticated, isLoading, initialize } = useAuthStore();
 
   useEffect(() => {
-    initDB();
-    initialize();
+    initDB().then(() => initialize());
   }, []);
 
   useEffect(() => {

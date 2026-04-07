@@ -37,9 +37,9 @@ export default function TodayScreen() {
     }, [])
   );
 
-  function handleSave() {
+  async function handleSave() {
     if (!draft.mood_score) {
-      setSaveError('Please select how you're feeling.');
+      setSaveError("Please select how you're feeling.");
       return;
     }
     if (!draft.energy_score) {
@@ -47,7 +47,7 @@ export default function TodayScreen() {
       return;
     }
     setSaveError('');
-    const entry = saveEntry();
+    const entry = await saveEntry();
     if (entry) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);

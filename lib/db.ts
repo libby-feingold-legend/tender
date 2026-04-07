@@ -1,10 +1,18 @@
 import * as SQLite from 'expo-sqlite';
 import { Entry, EntryDraft, HabitTag, MoodScore, EnergyScore } from '@/types';
 
-const db = SQLite.openDatabaseSync('soft-days.db');
+let db: SQLite.SQLiteDatabase | null = null;
 
-export function initDB() {
-  db.execSync(`
+export async function getDB(): Promise<SQLite.SQLiteDatabase> {
+  if (!db) {
+    db = await SQLite.openDatabaseAsync('soft-days.db');
+  }
+  return db;
+}
+
+export async function initDB(): Promise<void> {
+  const database = await getDB();
+  await database.execAsync(`
     PRAGMA journal_mode = WAL;
 
     CREATE TABLE IF NOT EXISTS entries (
@@ -35,15 +43,17 @@ function rowToEntry(row: Record<string, unknown>): Entry {
   };
 }
 
-export function upsertEntry(draft: EntryDraft): Entry {
+export async function upsertEntry(draft: EntryDraft): Promise<Entry> {
+  const database = await getDB();
   const now = new Date().toISOString();
-  const existing = db.getFirstSync<Record<string, unknown>>(
+
+  const existing = await database.getFirstAsync<Record<string, unknown>>(
     'SELECT * FROM entries WHERE logged_date = ?',
     [draft.logged_date]
   );
 
   if (existing) {
-    db.runSync(
+    await database.runAsync(
       `UPDATE entries SET
         mood_score = ?, energy_score = ?, gratitude_text = ?,
         free_note = ?, habits = ?, updated_at = ?
@@ -58,10 +68,18 @@ export function upsertEntry(draft: EntryDraft): Entry {
         draft.logged_date,
       ]
     );
-    return rowToEntry({ ...existing, ...draft, habits: JSON.stringify(draft.habits), updated_at: now });
+    return rowToEntry({
+      ...existing,
+      mood_score: draft.mood_score!,
+      energy_score: draft.energy_score!,
+      gratitude_text: draft.gratitude_text,
+      free_note: draft.free_note,
+      habits: JSON.stringify(draft.habits),
+      updated_at: now,
+    });
   } else {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    db.runSync(
+    await database.runAsync(
       `INSERT INTO entries
         (id, logged_date, mood_score, energy_score, gratitude_text, free_note, habits, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -91,21 +109,24 @@ export function upsertEntry(draft: EntryDraft): Entry {
   }
 }
 
-export function getEntryByDate(date: string): Entry | null {
-  const row = db.getFirstSync<Record<string, unknown>>(
+export async function getEntryByDate(date: string): Promise<Entry | null> {
+  const database = await getDB();
+  const row = await database.getFirstAsync<Record<string, unknown>>(
     'SELECT * FROM entries WHERE logged_date = ?',
     [date]
   );
   return row ? rowToEntry(row) : null;
 }
 
-export function getAllEntries(): Entry[] {
-  const rows = db.getAllSync<Record<string, unknown>>(
+export async function getAllEntries(): Promise<Entry[]> {
+  const database = await getDB();
+  const rows = await database.getAllAsync<Record<string, unknown>>(
     'SELECT * FROM entries ORDER BY logged_date DESC'
   );
   return rows.map(rowToEntry);
 }
 
-export function deleteEntry(id: string) {
-  db.runSync('DELETE FROM entries WHERE id = ?', [id]);
+export async function deleteEntry(id: string): Promise<void> {
+  const database = await getDB();
+  await database.runAsync('DELETE FROM entries WHERE id = ?', [id]);
 }

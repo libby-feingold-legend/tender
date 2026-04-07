@@ -98,7 +98,7 @@ export default function JournalScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    loadEntries();
+    await loadEntries();
     setRefreshing(false);
   }
 

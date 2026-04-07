@@ -11,15 +11,15 @@ interface EntryState {
   todayEntry: Entry | null;
   draft: EntryDraft;
   isLoading: boolean;
-  loadEntries: () => void;
+  loadEntries: () => Promise<void>;
   loadToday: () => Promise<void>;
   setMood: (score: MoodScore) => void;
   setEnergy: (score: EnergyScore) => void;
   setGratitude: (text: string) => void;
   setNote: (text: string) => void;
   toggleHabit: (habit: HabitTag) => void;
-  saveEntry: () => Entry | null;
-  removeEntry: (id: string) => void;
+  saveEntry: () => Promise<Entry | null>;
+  removeEntry: (id: string) => Promise<void>;
   resetDraft: () => void;
 }
 
@@ -38,7 +38,7 @@ async function persistDraft(draft: EntryDraft) {
   try {
     await AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   } catch {
-    // Non-critical — silently ignore
+    // Non-critical
   }
 }
 
@@ -47,7 +47,6 @@ async function loadPersistedDraft(): Promise<EntryDraft | null> {
     const raw = await AsyncStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const draft: EntryDraft = JSON.parse(raw);
-    // Discard draft if it's from a previous day
     if (draft.logged_date !== todayISO()) {
       await AsyncStorage.removeItem(DRAFT_KEY);
       return null;
@@ -64,17 +63,16 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   draft: emptyDraft(),
   isLoading: false,
 
-  loadEntries: () => {
-    const entries = getAllEntries();
+  loadEntries: async () => {
+    const entries = await getAllEntries();
     set({ entries });
   },
 
   loadToday: async () => {
     const today = todayISO();
-    const todayEntry = getEntryByDate(today);
+    const todayEntry = await getEntryByDate(today);
 
     if (todayEntry) {
-      // Existing saved entry takes priority
       set({
         todayEntry,
         draft: {
@@ -87,7 +85,6 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         },
       });
     } else {
-      // Try to restore in-progress draft from AsyncStorage
       const persisted = await loadPersistedDraft();
       set({ todayEntry: null, draft: persisted ?? emptyDraft() });
     }
@@ -136,10 +133,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     });
   },
 
-  saveEntry: () => {
+  saveEntry: async () => {
     const { draft } = get();
     if (!draft.mood_score || !draft.energy_score) return null;
-    const entry = upsertEntry(draft);
+    const entry = await upsertEntry(draft);
     AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
     set((s) => ({
       todayEntry: entry,
@@ -148,8 +145,8 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     return entry;
   },
 
-  removeEntry: (id) => {
-    deleteEntry(id);
+  removeEntry: async (id) => {
+    await deleteEntry(id);
     set((s) => ({
       entries: s.entries.filter((e) => e.id !== id),
       todayEntry: s.todayEntry?.id === id ? null : s.todayEntry,
