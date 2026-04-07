@@ -20,8 +20,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   initialize: async () => {
-    const [session, account] = await Promise.all([getSession(), hasAccount()]);
-    set({ isAuthenticated: session, hasAccount: account, isLoading: false });
+    try {
+      const [session, account] = await Promise.all([getSession(), hasAccount()]);
+      set({ isAuthenticated: session, hasAccount: account, isLoading: false });
+    } catch {
+      set({ isLoading: false });
+    }
   },
 
   login: async (email, password) => {
@@ -37,8 +41,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (email, password) => {
     set({ error: null });
     try {
+      // register() in lib/auth.ts sets the session directly
       await register(email, password);
-      await login(email, password);
       set({ isAuthenticated: true, hasAccount: true });
     } catch (e) {
       set({ error: (e as Error).message });
